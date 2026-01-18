@@ -220,6 +220,18 @@ namespace ScrollableDesktop
             return null;
         }
 
+        public WindowInfo FindWindowByHandle(IntPtr handle)
+        {
+            foreach (var win in _windows)
+            {
+                if (win.Handle == handle)
+                {
+                    return win;
+                }
+            }
+            return null;
+        }
+
         public bool IsWindowFullyVisible(WindowInfo win)
         {
             const int offset = 10; // 10px offset on all sides

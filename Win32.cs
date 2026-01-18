@@ -33,6 +33,16 @@ namespace ScrollableDesktop
         }
 
         [StructLayout(LayoutKind.Sequential)]
+        public struct KBDLLHOOKSTRUCT
+        {
+            public uint vkCode;
+            public uint scanCode;
+            public uint flags;
+            public uint time;
+            public IntPtr dwExtraInfo;
+        }
+
+        [StructLayout(LayoutKind.Sequential)]
         public struct RECT
         {
             public int Left, Top, Right, Bottom;
@@ -126,6 +136,12 @@ namespace ScrollableDesktop
 
         public const int VK_LMENU = 0xA4; // Left Alt key
         public const int VK_LBUTTON = 0x01; // Left mouse button
+        public const int VK_TAB = 0x09; // Tab key
+
+        public const int WM_KEYDOWN = 0x0100;
+        public const int WM_KEYUP = 0x0101;
+        public const int WM_SYSKEYDOWN = 0x0104; // Alt+key
+        public const int WM_SYSKEYUP = 0x0105;
 
         public static bool IsLeftMouseButtonPressed()
         {
@@ -142,5 +158,8 @@ namespace ScrollableDesktop
             GetClassName(hWnd, sb, sb.Capacity);
             return sb.ToString();
         }
+
+        [DllImport("user32.dll")]
+        public static extern IntPtr GetForegroundWindow();
     }
 }
