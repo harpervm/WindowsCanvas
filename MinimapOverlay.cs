@@ -205,8 +205,6 @@ namespace ScrollableDesktop
         {
             var fadeTimer = new System.Windows.Forms.Timer();
             fadeTimer.Interval = 1; // Update every 1ms for smooth 25ms animation
-            int steps = 0;
-            const int totalSteps = WindowFadeInDurationMs; // 25 steps for 25ms
             DateTime startTime = DateTime.Now;
 
             fadeTimer.Tick += (s, e) =>

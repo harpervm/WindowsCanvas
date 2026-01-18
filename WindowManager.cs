@@ -10,8 +10,8 @@ namespace ScrollableDesktop
     {
         private readonly Camera _camera;
         private readonly List<WindowInfo> _windows = new();
-        private System.Windows.Forms.Timer _refreshTimer;
-        private System.Windows.Forms.Timer _syncTimer;
+        private System.Windows.Forms.Timer? _refreshTimer;
+        private System.Windows.Forms.Timer? _syncTimer;
         private IntPtr _minimapOverlayHandle = IntPtr.Zero;
 
         public WindowManager(Camera camera)
@@ -193,7 +193,7 @@ namespace ScrollableDesktop
             return true;
         }
 
-        public WindowInfo GetWindowAtScreenPosition(int screenX, int screenY)
+        public WindowInfo? GetWindowAtScreenPosition(int screenX, int screenY)
         {
             // Convert screen position to world position
             int worldX = screenX + _camera.X;
@@ -220,7 +220,7 @@ namespace ScrollableDesktop
             return null;
         }
 
-        public WindowInfo FindWindowByHandle(IntPtr handle)
+        public WindowInfo? FindWindowByHandle(IntPtr handle)
         {
             foreach (var win in _windows)
             {

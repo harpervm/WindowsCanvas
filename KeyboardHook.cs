@@ -59,7 +59,7 @@ namespace ScrollableDesktop
             return Win32.CallNextHookEx(_hookId, nCode, wParam, lParam);
         }
 
-        private void CheckWindowActivation(object sender, EventArgs e)
+        private void CheckWindowActivation(object? sender, EventArgs e)
         {
             IntPtr foregroundWindow = Win32.GetForegroundWindow();
 

@@ -8,7 +8,7 @@ namespace ScrollableDesktop
         public int Y { get; set; }
         public int ScreenWidth { get; private set; }
         public int ScreenHeight { get; private set; }
-        private System.Action _onPositionChanged;
+        private System.Action? _onPositionChanged;
 
         public Camera()
         {
@@ -111,7 +111,7 @@ namespace ScrollableDesktop
             AnimateToPosition(newCameraX, newCameraY);
         }
 
-        private System.Windows.Forms.Timer _animationTimer;
+        private System.Windows.Forms.Timer? _animationTimer;
         private int _targetX;
         private int _targetY;
         private int _startX;
