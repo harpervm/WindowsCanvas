@@ -31,8 +31,16 @@ namespace ScrollableDesktop
 
         public void Move(int dx, int dy)
         {
-            X += dx;
-            Y += dy;
+            int newX = X + dx;
+            int newY = Y + dy;
+
+            // Clamp to world boundaries (3x3 grid)
+            // Camera position is top-left of viewport, so max position allows viewport to reach world edge
+            int maxX = ScreenWidth * 2; // Viewport width is ScreenWidth, so max X is ScreenWidth * 2
+            int maxY = ScreenHeight * 2; // Viewport height is ScreenHeight, so max Y is ScreenHeight * 2
+
+            X = Math.Max(0, Math.Min(maxX, newX));
+            Y = Math.Max(0, Math.Min(maxY, newY));
         }
     }
 }
