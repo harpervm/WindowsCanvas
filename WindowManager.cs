@@ -1,6 +1,8 @@
 using System;
 using System.Collections.Generic;
+using System.Linq;
 using System.Runtime.InteropServices;
+using System.Windows.Forms;
 
 namespace ScrollableDesktop
 {
@@ -8,6 +10,8 @@ namespace ScrollableDesktop
     {
         private readonly Camera _camera;
         private readonly List<WindowInfo> _windows = new();
+        private System.Windows.Forms.Timer _refreshTimer;
+        private System.Windows.Forms.Timer _syncTimer;
 
         public WindowManager(Camera camera)
         {
@@ -17,6 +21,18 @@ namespace ScrollableDesktop
         public void Start()
         {
             RefreshWindows();
+
+            // Timer to detect new windows (every 1.5 seconds)
+            _refreshTimer = new System.Windows.Forms.Timer();
+            _refreshTimer.Interval = 1500;
+            _refreshTimer.Tick += (s, e) => RefreshWindowsIncremental();
+            _refreshTimer.Start();
+
+            // Timer to sync positions from screen in real-time (every 500ms)
+            _syncTimer = new System.Windows.Forms.Timer();
+            _syncTimer.Interval = 500;
+            _syncTimer.Tick += (s, e) => SyncWindowPositionsFromScreen();
+            _syncTimer.Start();
         }
 
         public void RefreshWindows()
@@ -47,6 +63,80 @@ namespace ScrollableDesktop
             }, IntPtr.Zero);
         }
 
+        private void RefreshWindowsIncremental()
+        {
+            // Get all currently visible windows
+            var currentWindows = new HashSet<IntPtr>();
+            
+            Win32.EnumWindows((hWnd, lParam) =>
+            {
+                if (IsRealAppWindow(hWnd))
+                {
+                    currentWindows.Add(hWnd);
+                }
+                return true;
+            }, IntPtr.Zero);
+
+            // Remove windows that no longer exist
+            _windows.RemoveAll(win => !currentWindows.Contains(win.Handle) || !Win32.IsWindowVisible(win.Handle));
+
+            // Add new windows that aren't in our list
+            Win32.EnumWindows((hWnd, lParam) =>
+            {
+                if (!IsRealAppWindow(hWnd))
+                    return true;
+
+                // Check if we already have this window
+                if (_windows.Any(w => w.Handle == hWnd))
+                    return true;
+
+                // New window - add it
+                Win32.RECT rect;
+                if (!Win32.GetWindowRect(hWnd, out rect))
+                    return true;
+
+                int width = rect.Right - rect.Left;
+                int height = rect.Bottom - rect.Top;
+
+                var win = new WindowInfo(
+                    hWnd,
+                    rect.Left + _camera.X,
+                    rect.Top + _camera.Y,
+                    width,
+                    height
+                );
+
+                _windows.Add(win);
+                return true;
+            }, IntPtr.Zero);
+        }
+
+
+        public void SyncWindowPositionsFromScreen()
+        {
+            // Sync world coordinates from current screen positions
+            // This ensures manual window moves/resizes are captured before panning
+            foreach (var win in _windows)
+            {
+                // Check if window still exists and is valid
+                if (!Win32.IsWindowVisible(win.Handle))
+                    continue;
+
+                Win32.RECT rect;
+                if (!Win32.GetWindowRect(win.Handle, out rect))
+                    continue;
+
+                // Update world coordinates from current screen position
+                int screenX = rect.Left;
+                int screenY = rect.Top;
+                win.WorldX = screenX + _camera.X;
+                win.WorldY = screenY + _camera.Y;
+
+                // Update size from current window rect
+                win.Width = rect.Right - rect.Left;
+                win.Height = rect.Bottom - rect.Top;
+            }
+        }
 
         public void UpdateWindowPositions()
         {

@@ -56,6 +56,10 @@ namespace ScrollableDesktop
 
             DoubleBuffered = true;
 
+            // Keep minimap fixed in bottom-right corner
+            this.Resize += (s, e) => PositionBottomRight();
+            this.LocationChanged += (s, e) => PositionBottomRight();
+
             var timer = new System.Windows.Forms.Timer();
             timer.Interval = 33; // ~30fps
             timer.Tick += (s, e) => Invalidate();
@@ -67,8 +71,15 @@ namespace ScrollableDesktop
             var screen = Screen.PrimaryScreen?.WorkingArea;
             if (screen == null) return;
 
-            Left = screen.Value.Right - Width - 20;
-            Top = screen.Value.Bottom - Height - 20;
+            int newLeft = screen.Value.Right - Width - 20;
+            int newTop = screen.Value.Bottom - Height - 20;
+
+            // Only update if position actually changed to avoid infinite loop
+            if (Left != newLeft || Top != newTop)
+            {
+                Left = newLeft;
+                Top = newTop;
+            }
         }
 
         protected override void OnPaint(PaintEventArgs e)

@@ -35,6 +35,10 @@ namespace ScrollableDesktop
 
                 if ((Win32.MouseMessages)wParam == Win32.MouseMessages.WM_MBUTTONDOWN)
                 {
+                    // Sync window positions and sizes from screen before panning starts
+                    // This captures any manual window moves/resizes that happened
+                    _windowManager.SyncWindowPositionsFromScreen();
+                    
                     _dragging = true;
                     _lastX = info.pt.x;
                     _lastY = info.pt.y;
