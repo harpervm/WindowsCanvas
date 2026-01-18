@@ -13,11 +13,14 @@ namespace ScrollableDesktop
             WindowManager windowManager = new WindowManager(camera);
             MouseHook mouseHook = new MouseHook(camera, windowManager);
 
-            windowManager.Start();
-            mouseHook.Start();
-
             MinimapOverlay minimap = new MinimapOverlay(camera, windowManager);
             minimap.Show();
+            
+            // Register MinimapOverlay handle so it's excluded from canvas tracking
+            windowManager.SetMinimapOverlayHandle(minimap.Handle);
+
+            windowManager.Start();
+            mouseHook.Start();
 
             Application.Run();
         }

@@ -12,10 +12,16 @@ namespace ScrollableDesktop
         private readonly List<WindowInfo> _windows = new();
         private System.Windows.Forms.Timer _refreshTimer;
         private System.Windows.Forms.Timer _syncTimer;
+        private IntPtr _minimapOverlayHandle = IntPtr.Zero;
 
         public WindowManager(Camera camera)
         {
             _camera = camera;
+        }
+
+        public void SetMinimapOverlayHandle(IntPtr handle)
+        {
+            _minimapOverlayHandle = handle;
         }
 
         public void Start()
@@ -118,6 +124,10 @@ namespace ScrollableDesktop
             // This ensures manual window moves/resizes are captured before panning
             foreach (var win in _windows)
             {
+                // Skip MinimapOverlay - it should stay fixed to screen
+                if (win.Handle == _minimapOverlayHandle)
+                    continue;
+
                 // Check if window still exists and is valid
                 if (!Win32.IsWindowVisible(win.Handle))
                     continue;
@@ -142,6 +152,10 @@ namespace ScrollableDesktop
         {
             foreach (var win in _windows)
             {
+                // Skip MinimapOverlay - it should stay fixed to screen
+                if (win.Handle == _minimapOverlayHandle)
+                    continue;
+
                 int screenX = win.WorldX - _camera.X;
                 int screenY = win.WorldY - _camera.Y;
 
@@ -159,6 +173,10 @@ namespace ScrollableDesktop
         private bool IsRealAppWindow(IntPtr hWnd)
         {
             if (!Win32.IsWindowVisible(hWnd))
+                return false;
+
+            // Exclude MinimapOverlay - it should be fixed to screen, not part of canvas
+            if (hWnd == _minimapOverlayHandle)
                 return false;
 
             IntPtr shellWindow = Win32.GetShellWindow();
