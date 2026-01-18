@@ -13,6 +13,12 @@ namespace ScrollableDesktop
         private int _lastCameraY;
         private System.Windows.Forms.Timer _fadeTimer;
         private System.Windows.Forms.Timer _animationTimer;
+        private System.Windows.Forms.Timer _startupTimer;
+        private System.Collections.Generic.Dictionary<IntPtr, double> _windowOpacities;
+        private double _textOpacity = 1.0;
+        private double _cameraOpacity = 0.0;
+        private DateTime _startTime;
+        private bool _startupComplete = false;
         private double _targetOpacity;
         private double _currentOpacity;
         private bool _isAnimating;
@@ -22,6 +28,12 @@ namespace ScrollableDesktop
         private const int FadeOutDurationMs = 1000; // 1 second fade out
         private const int FadeInDurationMs = 25; // 25ms fade in
         private const int AnimationStepMs = 16; // ~60fps animation
+        private const int TextVisibleDurationMs = 2000; // Text visible for 2 seconds
+        private const int TextFadeOutDurationMs = 25; // Text fade out in 25ms
+        private const int CameraFadeInDelayMs = 2000; // Camera starts at 1 second
+        private const int CameraFadeInDurationMs = 25; // Camera fade in 25ms
+        private const int WindowFadeInDurationMs = 100; // Window fade in 25ms
+        private const int WindowFadeInDelayMs = 50; // 50ms delay between windows
 
         public int WorldWidth { get; private set; }
         public int WorldHeight { get; private set; }
@@ -34,6 +46,8 @@ namespace ScrollableDesktop
             _windowManager = windowManager;
             _lastCameraX = camera.X;
             _lastCameraY = camera.Y;
+            _windowOpacities = new System.Collections.Generic.Dictionary<IntPtr, double>();
+            _startTime = DateTime.Now;
 
             // Get current screen size
             var screen = Screen.PrimaryScreen?.Bounds;
@@ -117,6 +131,113 @@ namespace ScrollableDesktop
             _animationTimer = new System.Windows.Forms.Timer();
             _animationTimer.Interval = AnimationStepMs;
             _animationTimer.Tick += (s, e) => UpdateAnimation();
+
+            // Timer for startup sequence
+            _startupTimer = new System.Windows.Forms.Timer();
+            _startupTimer.Interval = 16; // ~60fps
+            _startupTimer.Tick += (s, e) => UpdateStartupSequence();
+            _startupTimer.Start();
+        }
+
+        private void UpdateStartupSequence()
+        {
+            if (_startupComplete)
+            {
+                _startupTimer.Stop();
+                return;
+            }
+
+            var elapsed = (DateTime.Now - _startTime).TotalMilliseconds;
+
+            // 1. Text: visible for 2 seconds, then fade out in 25ms
+            if (elapsed >= TextVisibleDurationMs)
+            {
+                // Start fading out text
+                double fadeOutProgress = Math.Min(1.0, (elapsed - TextVisibleDurationMs) / TextFadeOutDurationMs);
+                _textOpacity = 1.0 - fadeOutProgress;
+            }
+
+            // 2. Camera: starts fading in at 1 second, duration 25ms
+            if (elapsed >= CameraFadeInDelayMs)
+            {
+                double fadeInProgress = Math.Min(1.0, (elapsed - CameraFadeInDelayMs) / CameraFadeInDurationMs);
+                _cameraOpacity = fadeInProgress;
+            }
+
+            // 3. Windows: start appearing after text fades out, one by one every 50ms
+            if (_textOpacity <= 0 && !_startupComplete)
+            {
+                StartWindowFadeInSequence();
+            }
+
+            Invalidate();
+        }
+
+        private void StartWindowFadeInSequence()
+        {
+            if (_startupComplete)
+                return;
+
+            // Find next window that hasn't been faded in yet
+            foreach (var win in _windowManager.Windows)
+            {
+                if (!_windowOpacities.ContainsKey(win.Handle))
+                {
+                    // Start fading in this window
+                    _windowOpacities[win.Handle] = 0.0;
+                    FadeInWindow(win.Handle);
+                    return;
+                }
+            }
+
+            // All windows have been faded in
+            if (_windowManager.Windows.Count > 0 && _windowOpacities.Count >= _windowManager.Windows.Count)
+            {
+                _startupComplete = true;
+            }
+            else if (_windowManager.Windows.Count == 0)
+            {
+                _startupComplete = true;
+            }
+        }
+
+        private void FadeInWindow(IntPtr windowHandle)
+        {
+            var fadeTimer = new System.Windows.Forms.Timer();
+            fadeTimer.Interval = 1; // Update every 1ms for smooth 25ms animation
+            int steps = 0;
+            const int totalSteps = WindowFadeInDurationMs; // 25 steps for 25ms
+            DateTime startTime = DateTime.Now;
+
+            fadeTimer.Tick += (s, e) =>
+            {
+                var elapsed = (DateTime.Now - startTime).TotalMilliseconds;
+                double progress = Math.Min(1.0, elapsed / WindowFadeInDurationMs);
+                
+                if (_windowOpacities.ContainsKey(windowHandle))
+                {
+                    _windowOpacities[windowHandle] = progress;
+                    Invalidate();
+                }
+
+                if (progress >= 1.0)
+                {
+                    fadeTimer.Stop();
+                    fadeTimer.Dispose();
+                    
+                    // After delay, start next window
+                    var delayTimer = new System.Windows.Forms.Timer();
+                    delayTimer.Interval = WindowFadeInDelayMs;
+                    delayTimer.Tick += (s2, e2) =>
+                    {
+                        delayTimer.Stop();
+                        delayTimer.Dispose();
+                        StartWindowFadeInSequence();
+                    };
+                    delayTimer.Start();
+                }
+            };
+            fadeTimer.Start();
         }
 
         private void CheckCameraMovement()
@@ -258,37 +379,107 @@ namespace ScrollableDesktop
             float scaleX = (float)Width / WorldWidth;
             float scaleY = (float)Height / WorldHeight;
 
-            // Camera viewport
-            float camX = _camera.X * scaleX;
-            float camY = _camera.Y * scaleY;
+            // Camera viewport (with fade-in animation)
+            if (_cameraOpacity > 0)
+            {
+                float camX = _camera.X * scaleX;
+                float camY = _camera.Y * scaleY;
 
-            float viewW = ScreenWidth * scaleX;
-            float viewH = ScreenHeight * scaleY;
+                float viewW = ScreenWidth * scaleX;
+                float viewH = ScreenHeight * scaleY;
 
-            g.DrawRectangle(Pens.Lime, camX, camY, viewW, viewH);
+                using (var cameraPen = new Pen(Color.FromArgb((int)(255 * _cameraOpacity), Color.Lime), 1f))
+                {
+                    g.DrawRectangle(cameraPen, camX, camY, viewW, viewH);
+                }
+            }
 
-            // Draw windows with 3px border radius
+            // Draw startup text (center-aligned)
+            if (_textOpacity > 0)
+            {
+                using (var textBrush = new SolidBrush(Color.FromArgb((int)(255 * _textOpacity), Color.White)))
+                using (var centerFormat = new StringFormat())
+                {
+                    centerFormat.Alignment = StringAlignment.Center;
+                    centerFormat.LineAlignment = StringAlignment.Center;
+
+                    var font = new Font("Segoe UI", 10, FontStyle.Bold);
+                    string text = "WindowsCanvas";
+                    string subtitle = "by HarperServices.nl";
+
+                    var textSize = g.MeasureString(text, font);
+                    var subtitleSize = g.MeasureString(subtitle, font);
+
+                    // Calculate center positions
+                    float totalHeight = textSize.Height + subtitleSize.Height + 5;
+                    float centerY = Height / 2f;
+                    float textY = centerY - totalHeight / 2f + textSize.Height / 2f;
+                    float subtitleY = centerY + totalHeight / 2f - subtitleSize.Height / 2f;
+
+                    // Draw main text centered
+                    g.DrawString(text, font, textBrush, new RectangleF(0, textY - textSize.Height / 2f, Width, textSize.Height), centerFormat);
+
+                    // Draw subtitle centered
+                    using (var subtitleFont = new Font("Segoe UI", 8, FontStyle.Regular))
+                    {
+                        g.DrawString(subtitle, subtitleFont, textBrush, new RectangleF(0, subtitleY - subtitleSize.Height / 2f, Width, subtitleSize.Height), centerFormat);
+                    }
+
+                    font.Dispose();
+                }
+            }
+
+            // Draw windows with 3px border radius and fade-in animation
             foreach (var win in _windowManager.Windows)
             {
+                // Get opacity for this window
+                double windowOpacity;
+                if (_startupComplete)
+                {
+                    // After startup, new windows fade in immediately
+                    if (!_windowOpacities.ContainsKey(win.Handle))
+                    {
+                        _windowOpacities[win.Handle] = 0.0;
+                        FadeInWindow(win.Handle);
+                        windowOpacity = 0.0;
+                    }
+                    else
+                    {
+                        windowOpacity = _windowOpacities[win.Handle];
+                    }
+                }
+                else
+                {
+                    // During startup, only show windows that have been faded in
+                    windowOpacity = _windowOpacities.TryGetValue(win.Handle, out var opacity) ? opacity : 0.0;
+                }
+
+                // Skip drawing if window hasn't faded in yet (unless startup is complete)
+                if (!_startupComplete && windowOpacity <= 0)
+                    continue;
+
                 float x = win.WorldX * scaleX;
                 float y = win.WorldY * scaleY;
                 float w = win.Width * scaleX;
                 float h = win.Height * scaleY;
 
-                // Only draw if window is large enough for rounded corners
-                if (w > 6 && h > 6)
+                // Create pen with opacity
+                using (var winPen = new Pen(Color.FromArgb((int)(255 * windowOpacity), Color.White), 1f))
                 {
-                    using (var winPath = CreateRoundedRectangle(new RectangleF(x, y, w, h), 3f))
-                    using (var winPen = new Pen(Color.White, 1f))
+                    // Only draw if window is large enough for rounded corners
+                    if (w > 6 && h > 6)
                     {
-                        winPen.Alignment = PenAlignment.Inset;
-                        g.DrawPath(winPen, winPath);
+                        using (var winPath = CreateRoundedRectangle(new RectangleF(x, y, w, h), 3f))
+                        {
+                            winPen.Alignment = PenAlignment.Inset;
+                            g.DrawPath(winPen, winPath);
+                        }
                     }
-                }
-                else
-                {
-                    // For very small windows, just draw a rectangle
-                    g.DrawRectangle(Pens.White, x, y, w, h);
+                    else
+                    {
+                        // For very small windows, just draw a rectangle
+                        g.DrawRectangle(winPen, x, y, w, h);
+                    }
                 }
             }
         }
