@@ -8,10 +8,13 @@ namespace ScrollableDesktop
     {
         public delegate bool EnumWindowsProc(IntPtr hWnd, IntPtr lParam);
         public delegate IntPtr LowLevelMouseProc(int nCode, IntPtr wParam, IntPtr lParam);
+        public delegate IntPtr LowLevelKeyboardProc(int nCode, IntPtr wParam, IntPtr lParam);
 
         public enum MouseMessages
         {
             WM_MOUSEMOVE = 0x0200,
+            WM_LBUTTONDOWN = 0x0201,
+            WM_LBUTTONUP = 0x0202,
             WM_MBUTTONDOWN = 0x0207,
             WM_MBUTTONUP = 0x0208,
         }
@@ -68,6 +71,13 @@ namespace ScrollableDesktop
             uint dwThreadId);
 
         [DllImport("user32.dll")]
+        public static extern IntPtr SetWindowsHookEx(
+            int idHook,
+            LowLevelKeyboardProc lpfn,
+            IntPtr hMod,
+            uint dwThreadId);
+
+        [DllImport("user32.dll")]
         public static extern bool UnhookWindowsHookEx(IntPtr hhk);
 
         [DllImport("user32.dll")]
@@ -80,7 +90,7 @@ namespace ScrollableDesktop
         [DllImport("kernel32.dll")]
         public static extern IntPtr GetModuleHandle(string lpModuleName);
 
-       public static IntPtr SetHook(LowLevelMouseProc proc)
+        public static IntPtr SetHook(LowLevelMouseProc proc)
         {
             using var curProcess = Process.GetCurrentProcess();
             using var curModule = curProcess.MainModule;
@@ -91,8 +101,37 @@ namespace ScrollableDesktop
             return SetWindowsHookEx(14, proc, GetModuleHandle(curModule.ModuleName), 0);
         }
 
+        public static IntPtr SetKeyboardHook(LowLevelKeyboardProc proc)
+        {
+            using var curProcess = Process.GetCurrentProcess();
+            using var curModule = curProcess.MainModule;
+
+            if (curModule == null)
+                throw new InvalidOperationException("Failed to get main module.");
+
+            return SetWindowsHookEx(13, proc, GetModuleHandle(curModule.ModuleName), 0);
+        }
+
+        public static bool IsLeftAltPressed()
+        {
+            // Check if Left Alt key is currently pressed
+            return (GetAsyncKeyState(VK_LMENU) & 0x8000) != 0;
+        }
+
         [DllImport("user32.dll")]
         public static extern IntPtr GetShellWindow();
+
+        [DllImport("user32.dll")]
+        public static extern short GetAsyncKeyState(int vKey);
+
+        public const int VK_LMENU = 0xA4; // Left Alt key
+        public const int VK_LBUTTON = 0x01; // Left mouse button
+
+        public static bool IsLeftMouseButtonPressed()
+        {
+            // Check if Left mouse button is currently pressed
+            return (GetAsyncKeyState(VK_LBUTTON) & 0x8000) != 0;
+        }
 
         [DllImport("user32.dll", SetLastError = true)]
         public static extern int GetClassName(IntPtr hWnd, System.Text.StringBuilder lpClassName, int nMaxCount);
