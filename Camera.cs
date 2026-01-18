@@ -114,12 +114,29 @@ namespace ScrollableDesktop
         private System.Windows.Forms.Timer _animationTimer;
         private int _targetX;
         private int _targetY;
+        private int _startX;
+        private int _startY;
+        private double _animationProgress = 0.0;
         private bool _isAnimating = false;
+        private const double AnimationDuration = 0.4; // Duration in seconds
+        private DateTime _animationStartTime;
+
+        // Ease-in-out cubic function: starts slow, accelerates in middle, decelerates at end
+        private static double EaseInOutCubic(double t)
+        {
+            return t < 0.5
+                ? 4 * t * t * t
+                : 1 - Math.Pow(-2 * t + 2, 3) / 2;
+        }
 
         private void AnimateToPosition(int targetX, int targetY)
         {
             _targetX = targetX;
             _targetY = targetY;
+            _startX = X;
+            _startY = Y;
+            _animationProgress = 0.0;
+            _animationStartTime = DateTime.Now;
 
             if (_isAnimating)
                 return; // Already animating
@@ -129,32 +146,20 @@ namespace ScrollableDesktop
             _animationTimer.Interval = 16; // ~60fps
             _animationTimer.Tick += (s, e) =>
             {
-                const int speed = 20; // Pixels per frame (adjust for animation speed)
-                bool moved = false;
+                double elapsed = (DateTime.Now - _animationStartTime).TotalSeconds;
+                _animationProgress = Math.Min(elapsed / AnimationDuration, 1.0);
 
-                // Animate X
-                if (X < _targetX)
-                {
-                    X = Math.Min(X + speed, _targetX);
-                    moved = true;
-                }
-                else if (X > _targetX)
-                {
-                    X = Math.Max(X - speed, _targetX);
-                    moved = true;
-                }
+                // Apply easing function
+                double eased = EaseInOutCubic(_animationProgress);
 
-                // Animate Y
-                if (Y < _targetY)
-                {
-                    Y = Math.Min(Y + speed, _targetY);
-                    moved = true;
-                }
-                else if (Y > _targetY)
-                {
-                    Y = Math.Max(Y - speed, _targetY);
-                    moved = true;
-                }
+                // Calculate new position based on eased progress
+                int newX = _startX + (int)((_targetX - _startX) * eased);
+                int newY = _startY + (int)((_targetY - _startY) * eased);
+
+                bool moved = (X != newX || Y != newY);
+
+                X = newX;
+                Y = newY;
 
                 // Notify position changed during animation
                 if (moved)
@@ -163,8 +168,11 @@ namespace ScrollableDesktop
                 }
 
                 // Stop animation when reached target
-                if (!moved)
+                if (_animationProgress >= 1.0)
                 {
+                    X = _targetX;
+                    Y = _targetY;
+                    _onPositionChanged?.Invoke();
                     _isAnimating = false;
                     _animationTimer.Stop();
                     _animationTimer.Dispose();
