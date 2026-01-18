@@ -7,7 +7,7 @@ namespace ScrollableDesktop
     {
         static void Main()
         {
-            Console.WriteLine("WindowsCavas by HarperServices.nl is starting...");
+            Console.WriteLine("WindowsCanvas by HarperServices.nl is starting...");
 
             Camera camera = new Camera();
             WindowManager windowManager = new WindowManager(camera);
