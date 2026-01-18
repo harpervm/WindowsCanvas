@@ -9,16 +9,42 @@ namespace ScrollableDesktop
         private readonly Camera _camera;
         private readonly WindowManager _windowManager;
 
-        public int WorldWidth = 2560 * 3;
-        public int WorldHeight = 1440 * 3;
+        public int WorldWidth { get; private set; }
+        public int WorldHeight { get; private set; }
+        public int ScreenWidth { get; private set; }
+        public int ScreenHeight { get; private set; }
 
         public MinimapOverlay(Camera camera, WindowManager windowManager)
         {
             _camera = camera;
             _windowManager = windowManager;
 
-            Width = 220;
-            Height = 140;
+            // Get current screen size
+            var screen = Screen.PrimaryScreen?.Bounds;
+            if (screen == null)
+            {
+                ScreenWidth = 2560;
+                ScreenHeight = 1440;
+            }
+            else
+            {
+                ScreenWidth = screen.Value.Width;
+                ScreenHeight = screen.Value.Height;
+            }
+
+            // World is 3x3 of the screen size
+            WorldWidth = ScreenWidth * 3;
+            WorldHeight = ScreenHeight * 3;
+
+            // Calculate minimap size maintaining aspect ratio
+            // Base size for minimap, but maintain screen aspect ratio
+            float aspectRatio = (float)ScreenWidth / ScreenHeight;
+            int baseMinimapHeight = 140;
+            int minimapHeight = baseMinimapHeight;
+            int minimapWidth = (int)(minimapHeight * aspectRatio);
+
+            Width = minimapWidth;
+            Height = minimapHeight;
             FormBorderStyle = FormBorderStyle.None;
             TopMost = true;
             ShowInTaskbar = false;
@@ -58,8 +84,8 @@ namespace ScrollableDesktop
             float camX = _camera.X * scaleX;
             float camY = _camera.Y * scaleY;
 
-            float viewW = 2560 * scaleX;
-            float viewH = 1440 * scaleY;
+            float viewW = ScreenWidth * scaleX;
+            float viewH = ScreenHeight * scaleY;
 
             g.DrawRectangle(Pens.Lime, camX, camY, viewW, viewH);
 
