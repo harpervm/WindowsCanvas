@@ -1,5 +1,6 @@
 using System;
 using System.Drawing;
+using System.Drawing.Drawing2D;
 using System.Windows.Forms;
 
 namespace ScrollableDesktop
@@ -63,7 +64,13 @@ namespace ScrollableDesktop
             FormBorderStyle = FormBorderStyle.None;
             TopMost = true;
             ShowInTaskbar = false;
-            BackColor = Color.Black;
+            
+            // Enable custom painting for transparency effect
+            SetStyle(ControlStyles.UserPaint, true);
+            SetStyle(ControlStyles.AllPaintingInWmPaint, true);
+            SetStyle(ControlStyles.Opaque, false);
+            BackColor = Color.Black; // Base color (will be drawn with transparency in OnPaint)
+            
             _currentOpacity = FullOpacity;
             _targetOpacity = FullOpacity;
             Opacity = FullOpacity;
@@ -71,10 +78,17 @@ namespace ScrollableDesktop
             StartPosition = FormStartPosition.Manual;
             PositionBottomRight();
 
+            // Set form region to rounded rectangle for proper rounded corners
+            SetRoundedRegion();
+
             DoubleBuffered = true;
 
             // Keep minimap fixed in bottom-right corner
-            this.Resize += (s, e) => PositionBottomRight();
+            this.Resize += (s, e) =>
+            {
+                SetRoundedRegion();
+                PositionBottomRight();
+            };
             this.LocationChanged += (s, e) => PositionBottomRight();
 
             // Timer for rendering
@@ -172,6 +186,14 @@ namespace ScrollableDesktop
             Opacity = _currentOpacity;
         }
 
+        private void SetRoundedRegion()
+        {
+            using (var path = CreateRoundedRectangle(new RectangleF(0, 0, Width, Height), 8f))
+            {
+                Region = new Region(path);
+            }
+        }
+
         private void PositionBottomRight()
         {
             var screen = Screen.PrimaryScreen?.WorkingArea;
@@ -188,11 +210,50 @@ namespace ScrollableDesktop
             }
         }
 
+        private GraphicsPath CreateRoundedRectangle(RectangleF rect, float radius)
+        {
+            var path = new GraphicsPath();
+            float diameter = radius * 2;
+            
+            path.AddArc(rect.X, rect.Y, diameter, diameter, 180, 90); // Top-left
+            path.AddArc(rect.Right - diameter, rect.Y, diameter, diameter, 270, 90); // Top-right
+            path.AddArc(rect.Right - diameter, rect.Bottom - diameter, diameter, diameter, 0, 90); // Bottom-right
+            path.AddArc(rect.X, rect.Bottom - diameter, diameter, diameter, 90, 90); // Bottom-left
+            path.CloseFigure();
+            
+            return path;
+        }
+
         protected override void OnPaint(PaintEventArgs e)
         {
             var g = e.Graphics;
+            
+            // Enable high-quality rendering for smooth rounded corners
+            g.SmoothingMode = SmoothingMode.HighQuality;
+            g.PixelOffsetMode = PixelOffsetMode.HighQuality;
+            g.InterpolationMode = InterpolationMode.HighQualityBicubic;
+            g.CompositingQuality = CompositingQuality.HighQuality;
 
-            g.FillRectangle(Brushes.Black, 0, 0, Width, Height);
+            // Draw semi-transparent dark background with 8px border radius
+            // Use a slightly smaller rectangle to account for the border
+            using (var bgBrush = new SolidBrush(Color.FromArgb(180, 0, 0, 0)))
+            using (var bgPath = CreateRoundedRectangle(new RectangleF(0, 0, Width, Height), 8f))
+            {
+                g.FillPath(bgBrush, bgPath);
+            }
+            
+            // Draw border as a separate inset path to avoid pixelation
+            using (var borderBrush = new SolidBrush(Color.FromArgb(255, 60, 60, 60)))
+            using (var outerPath = CreateRoundedRectangle(new RectangleF(0, 0, Width, Height), 8f))
+            using (var innerPath = CreateRoundedRectangle(new RectangleF(1, 1, Width - 2, Height - 2), 7f))
+            {
+                // Create a region that's the difference between outer and inner
+                using (var borderRegion = new Region(outerPath))
+                {
+                    borderRegion.Exclude(innerPath);
+                    g.FillRegion(borderBrush, borderRegion);
+                }
+            }
 
             float scaleX = (float)Width / WorldWidth;
             float scaleY = (float)Height / WorldHeight;
@@ -206,16 +267,29 @@ namespace ScrollableDesktop
 
             g.DrawRectangle(Pens.Lime, camX, camY, viewW, viewH);
 
+            // Draw windows with 3px border radius
             foreach (var win in _windowManager.Windows)
             {
-        
-
                 float x = win.WorldX * scaleX;
                 float y = win.WorldY * scaleY;
                 float w = win.Width * scaleX;
                 float h = win.Height * scaleY;
 
-                g.DrawRectangle(Pens.White, x, y, w, h);
+                // Only draw if window is large enough for rounded corners
+                if (w > 6 && h > 6)
+                {
+                    using (var winPath = CreateRoundedRectangle(new RectangleF(x, y, w, h), 3f))
+                    using (var winPen = new Pen(Color.White, 1f))
+                    {
+                        winPen.Alignment = PenAlignment.Inset;
+                        g.DrawPath(winPen, winPath);
+                    }
+                }
+                else
+                {
+                    // For very small windows, just draw a rectangle
+                    g.DrawRectangle(Pens.White, x, y, w, h);
+                }
             }
         }
     }
