@@ -93,7 +93,7 @@ namespace ScrollableDesktop
 
             // Timer for rendering
             var renderTimer = new System.Windows.Forms.Timer();
-            renderTimer.Interval = 33; // ~30fps
+            renderTimer.Interval = 16; // ~60fps (1000ms / 60 = 16.67ms)
             renderTimer.Tick += (s, e) => Invalidate();
             renderTimer.Start();
 
