@@ -1,6 +1,7 @@
 # WindowsCanvas
 
 **Transform your desktop into an infinite scrollable canvas where windows live in a virtual world space.**
+![windows-canvas](https://github.com/user-attachments/assets/bf4ecc60-f320-4f14-94da-d8f54bdb82b4)
 
 ## What is WindowsCanvas?
 
