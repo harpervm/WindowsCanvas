@@ -100,9 +100,13 @@ namespace ScrollableDesktop
 
             g.DrawRectangle(Pens.Lime, camX, camY, viewW, viewH);
 
-            // Windows
+            // Windows (excluding the MinimapOverlay itself)
             foreach (var win in _windowManager.Windows)
             {
+                // Skip the MinimapOverlay window itself
+                if (win.Handle == this.Handle)
+                    continue;
+
                 float x = win.WorldX * scaleX;
                 float y = win.WorldY * scaleY;
                 float w = win.Width * scaleX;
