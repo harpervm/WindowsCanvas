@@ -8,6 +8,7 @@ namespace ScrollableDesktop
         public int Y { get; set; }
         public int ScreenWidth { get; private set; }
         public int ScreenHeight { get; private set; }
+        private System.Action _onPositionChanged;
 
         public Camera()
         {
@@ -29,6 +30,11 @@ namespace ScrollableDesktop
             Y = ScreenHeight;
         }
 
+        public void SetPositionChangedCallback(System.Action callback)
+        {
+            _onPositionChanged = callback;
+        }
+
         public void Move(int dx, int dy)
         {
             int newX = X + dx;
@@ -41,6 +47,130 @@ namespace ScrollableDesktop
 
             X = Math.Max(0, Math.Min(maxX, newX));
             Y = Math.Max(0, Math.Min(maxY, newY));
+            
+            _onPositionChanged?.Invoke();
+        }
+
+        public void ScrollToMakeVisible(int worldX, int worldY, int worldWidth, int worldHeight)
+        {
+            const int offset = 10; // 10px offset on all sides
+            const int taskbarHeight = 50; // Extra spacing at bottom for Windows taskbar
+            
+            // Calculate window's screen position with current camera
+            int screenX = worldX - X;
+            int screenY = worldY - Y;
+            int screenRight = screenX + worldWidth;
+            int screenBottom = screenY + worldHeight;
+
+            // Effective viewport boundaries with offsets
+            int effectiveLeft = offset;
+            int effectiveRight = ScreenWidth - offset;
+            int effectiveTop = offset;
+            int effectiveBottom = ScreenHeight - offset - taskbarHeight;
+
+            int newCameraX = X;
+            int newCameraY = Y;
+
+            // Calculate how much we need to scroll in each direction
+            int deltaX = 0;
+            int deltaY = 0;
+
+            // Check if window extends beyond left edge
+            if (screenX < effectiveLeft)
+            {
+                deltaX = screenX - effectiveLeft; // Negative value, move camera left
+            }
+            // Check if window extends beyond right edge
+            else if (screenRight > effectiveRight)
+            {
+                deltaX = screenRight - effectiveRight; // Positive value, move camera right
+            }
+
+            // Check if window extends beyond top edge
+            if (screenY < effectiveTop)
+            {
+                deltaY = screenY - effectiveTop; // Negative value, move camera up
+            }
+            // Check if window extends beyond bottom edge
+            else if (screenBottom > effectiveBottom)
+            {
+                deltaY = screenBottom - effectiveBottom; // Positive value, move camera down
+            }
+
+            // Apply the minimum scroll needed
+            newCameraX = X + deltaX;
+            newCameraY = Y + deltaY;
+
+            // Clamp to world boundaries
+            int maxX = ScreenWidth * 2;
+            int maxY = ScreenHeight * 2;
+            newCameraX = Math.Max(0, Math.Min(maxX, newCameraX));
+            newCameraY = Math.Max(0, Math.Min(maxY, newCameraY));
+
+            // Smoothly animate to new position
+            AnimateToPosition(newCameraX, newCameraY);
+        }
+
+        private System.Windows.Forms.Timer _animationTimer;
+        private int _targetX;
+        private int _targetY;
+        private bool _isAnimating = false;
+
+        private void AnimateToPosition(int targetX, int targetY)
+        {
+            _targetX = targetX;
+            _targetY = targetY;
+
+            if (_isAnimating)
+                return; // Already animating
+
+            _isAnimating = true;
+            _animationTimer = new System.Windows.Forms.Timer();
+            _animationTimer.Interval = 16; // ~60fps
+            _animationTimer.Tick += (s, e) =>
+            {
+                const int speed = 20; // Pixels per frame (adjust for animation speed)
+                bool moved = false;
+
+                // Animate X
+                if (X < _targetX)
+                {
+                    X = Math.Min(X + speed, _targetX);
+                    moved = true;
+                }
+                else if (X > _targetX)
+                {
+                    X = Math.Max(X - speed, _targetX);
+                    moved = true;
+                }
+
+                // Animate Y
+                if (Y < _targetY)
+                {
+                    Y = Math.Min(Y + speed, _targetY);
+                    moved = true;
+                }
+                else if (Y > _targetY)
+                {
+                    Y = Math.Max(Y - speed, _targetY);
+                    moved = true;
+                }
+
+                // Notify position changed during animation
+                if (moved)
+                {
+                    _onPositionChanged?.Invoke();
+                }
+
+                // Stop animation when reached target
+                if (!moved)
+                {
+                    _isAnimating = false;
+                    _animationTimer.Stop();
+                    _animationTimer.Dispose();
+                }
+            };
+            _animationTimer.Start();
         }
     }
 }

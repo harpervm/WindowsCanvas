@@ -12,6 +12,9 @@ namespace ScrollableDesktop
             Camera camera = new Camera();
             WindowManager windowManager = new WindowManager(camera);
             MouseHook mouseHook = new MouseHook(camera, windowManager);
+            
+            // Set up camera position change callback to update window positions
+            camera.SetPositionChangedCallback(() => windowManager.UpdateWindowPositions());
 
             MinimapOverlay minimap = new MinimapOverlay(camera, windowManager);
             minimap.Show();

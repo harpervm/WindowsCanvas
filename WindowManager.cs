@@ -193,6 +193,56 @@ namespace ScrollableDesktop
             return true;
         }
 
+        public WindowInfo GetWindowAtScreenPosition(int screenX, int screenY)
+        {
+            // Convert screen position to world position
+            int worldX = screenX + _camera.X;
+            int worldY = screenY + _camera.Y;
+
+            // Find the topmost window at this position
+            // Check windows in reverse order (topmost first)
+            for (int i = _windows.Count - 1; i >= 0; i--)
+            {
+                var win = _windows[i];
+                
+                // Skip MinimapOverlay
+                if (win.Handle == _minimapOverlayHandle)
+                    continue;
+
+                // Check if point is within window bounds
+                if (worldX >= win.WorldX && worldX < win.WorldX + win.Width &&
+                    worldY >= win.WorldY && worldY < win.WorldY + win.Height)
+                {
+                    return win;
+                }
+            }
+
+            return null;
+        }
+
+        public bool IsWindowFullyVisible(WindowInfo win)
+        {
+            const int offset = 10; // 10px offset on all sides
+            const int taskbarHeight = 50; // Extra spacing at bottom for Windows taskbar
+            
+            // Calculate window's screen position
+            int screenX = win.WorldX - _camera.X;
+            int screenY = win.WorldY - _camera.Y;
+            int screenRight = screenX + win.Width;
+            int screenBottom = screenY + win.Height;
+
+            // Effective viewport boundaries with offsets
+            int effectiveLeft = offset;
+            int effectiveRight = _camera.ScreenWidth - offset;
+            int effectiveTop = offset;
+            int effectiveBottom = _camera.ScreenHeight - offset - taskbarHeight;
+
+            // Check if window is fully within viewport with offsets
+            return screenX >= effectiveLeft && screenY >= effectiveTop && 
+                   screenRight <= effectiveRight && 
+                   screenBottom <= effectiveBottom;
+        }
+
         public IReadOnlyList<WindowInfo> Windows => _windows;
     }
 }

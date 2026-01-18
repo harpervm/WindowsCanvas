@@ -13,6 +13,10 @@ namespace ScrollableDesktop
         private bool _draggingWithAltLeftButton = false;
         private bool _altLeftButtonInitialized = false;
         private int _lastX, _lastY;
+        private DateTime _lastClickTime = DateTime.MinValue;
+        private int _lastClickX, _lastClickY;
+        private const int DoubleClickTimeMs = 500; // Windows double-click time
+        private const int DoubleClickDistance = 5; // Pixels
 
         private Win32.LowLevelMouseProc _proc;
         private IntPtr _hookId = IntPtr.Zero;
@@ -40,13 +44,19 @@ namespace ScrollableDesktop
                 // Block default mouse behaviors when Alt is held (prevent focusing, text selection, etc.)
                 if (isAltPressed)
                 {
-                    // Block left mouse button down/up when Alt is held to prevent default behaviors
+                    // Handle left mouse button when Alt is held
                     if ((Win32.MouseMessages)wParam == Win32.MouseMessages.WM_LBUTTONDOWN)
                     {
-                        // Start panning with Alt + Left Mouse Button
-                        _windowManager.SyncWindowPositionsFromScreen();
-                        _draggingWithAltLeftButton = true;
-                        _altLeftButtonInitialized = false; // Will be initialized on first mouse move
+                        // Check for double-click to scroll to window
+                        bool wasDoubleClick = HandleLeftClick(info.pt.x, info.pt.y);
+                        
+                        // If not a double-click, start panning with Alt + Left Mouse Button
+                        if (!wasDoubleClick && !_draggingWithAltLeftButton)
+                        {
+                            _windowManager.SyncWindowPositionsFromScreen();
+                            _draggingWithAltLeftButton = true;
+                            _altLeftButtonInitialized = false; // Will be initialized on first mouse move
+                        }
                         // Block the message to prevent default behavior
                         return new IntPtr(1);
                     }
@@ -148,6 +158,42 @@ namespace ScrollableDesktop
             }
 
             return Win32.CallNextHookEx(_hookId, nCode, wParam, lParam);
+        }
+
+        private bool HandleLeftClick(int x, int y)
+        {
+            var now = DateTime.Now;
+            var timeSinceLastClick = (now - _lastClickTime).TotalMilliseconds;
+            var distance = Math.Sqrt(Math.Pow(x - _lastClickX, 2) + Math.Pow(y - _lastClickY, 2));
+
+            // Check if this is a double-click
+            if (timeSinceLastClick < DoubleClickTimeMs && distance < DoubleClickDistance)
+            {
+                // Double-click detected - find window and scroll to it
+                var window = _windowManager.GetWindowAtScreenPosition(x, y);
+                if (window != null)
+                {
+                    // Check if window is fully visible
+                    if (!_windowManager.IsWindowFullyVisible(window))
+                    {
+                        // Scroll camera to make window visible
+                        _camera.ScrollToMakeVisible(window.WorldX, window.WorldY, window.Width, window.Height);
+                        _windowManager.UpdateWindowPositions();
+                    }
+                }
+
+                // Reset double-click tracking
+                _lastClickTime = DateTime.MinValue;
+                return true; // Indicate this was a double-click
+            }
+            else
+            {
+                // Single click - record for potential double-click
+                _lastClickTime = now;
+                _lastClickX = x;
+                _lastClickY = y;
+                return false; // Not a double-click
+            }
         }
     }
 }
